@@ -3,7 +3,7 @@ import {
   createNewPost,
   getAllPosts,
   upload,
-} from "../../middleware/post-middleware";
+} from "../middleware/post-middleware";
 
 const router = Router();
 
