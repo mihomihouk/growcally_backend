@@ -6,7 +6,7 @@
   "license": "MIT",
   "scripts": {
     "start": "NODE_ENV=development ts-node src/index.ts",
-    "dev": "NODE_ENV=development nodemon src/index.ts",
+    "dev": "NODE_ENV=development doppler run nodemon src/index.ts",
     "migrate:dev": "prisma migrate dev",
     "prisma:format": "prisma format",
     "db:push": "prisma db push",
