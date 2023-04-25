@@ -1,18 +1,10 @@
-import express from 'express';
-import Router from './routes';
+import express, { Application } from 'express';
+import { setupCors } from '../../config/cors';
 
-import dotenv from 'dotenv';
-import { expressInitializer } from './init/express';
+export const expressInitializer = (): Application => {
+  const app = express();
+  setupCors(app);
+  app.use(express.json({ limit: '50mb' }));
 
-dotenv.config();
-
-const port = 5000;
-
-const start = async (): Promise<void> => {
-  const app = expressInitializer();
-  app.listen(port, () => {
-    console.log(`Server is listening on ${port}`);
-    app.use('/api/v1', Router);
-  });
+  return app;
 };
-start();
