@@ -1,32 +1,27 @@
-import { v4 } from "uuid";
+import { v4 } from 'uuid';
 import {
   cleanFilename,
   safeDecodeURIComponent,
-  trimFilename,
-} from "../utils/text";
-import {
-  GetPostsRequest,
-  GetUploadUrlRequest,
-  UploadNewPostRequest,
-} from "../interfaces/request";
-import { RequestHandler } from "express";
-import { HttpStatusCodes } from "../enum/http-codes";
-import dotenv from "dotenv";
-import { promisify } from "util";
-import crypto from "crypto";
-import { s3Get } from "../s3/s3-service";
-import { PrismaClient } from "@prisma/client";
-import { MediaFile, Post } from "../interfaces/post";
-import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import multer from "multer";
-import sharp from "sharp";
+  trimFilename
+} from '../utils/text';
+import { GetPostsRequest, UploadNewPostRequest } from '../interfaces/request';
+import { RequestHandler } from 'express';
+import { HttpStatusCodes } from '../enum/http-codes';
+import dotenv from 'dotenv';
+import crypto from 'crypto';
+import { s3Get } from '../services/s3/s3-service';
+import { PrismaClient } from '@prisma/client';
+import { MediaFile, Post } from '../interfaces/post';
+import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import multer from 'multer';
+import sharp from 'sharp';
 
-const randomBytes = (bytes = 32) => crypto.randomBytes(bytes).toString("hex");
+const randomBytes = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
 
 dotenv.config();
 
-const fs = require("fs");
+const fs = require('fs');
 const prisma = new PrismaClient();
 
 const storage = multer.memoryStorage();
@@ -50,10 +45,10 @@ export const getAllPosts: RequestHandler = async (
 ) => {
   try {
     const postsFromPrisma = await prisma.post.findMany({
-      orderBy: [{ createdAt: "desc" }],
+      orderBy: [{ createdAt: 'desc' }],
       include: {
-        files: true,
-      },
+        files: true
+      }
     });
 
     const posts: Post[] = [];
@@ -62,7 +57,7 @@ export const getAllPosts: RequestHandler = async (
       for (const file of post.files) {
         const getObjectParams = {
           Bucket: bucketName,
-          Key: file.fileKey,
+          Key: file.fileKey
         };
         const command = new GetObjectCommand(getObjectParams);
         const fileUrl = await getSignedUrl(s3Get, command, { expiresIn: 3600 });
@@ -73,7 +68,7 @@ export const getAllPosts: RequestHandler = async (
           mimetype: file.mimetype,
           alt: file.alt,
           fileKey: file.fileKey,
-          fileUrl,
+          fileUrl
         });
       }
 
@@ -85,13 +80,13 @@ export const getAllPosts: RequestHandler = async (
         updatedAt: post.updatedAt,
         author: post.author,
         likes: post.likes,
-        totalComments: post.totalComments,
+        totalComments: post.totalComments
       });
     }
 
     res.status(HttpStatusCodes.OK).json(posts);
   } catch (error) {
-    console.error("[Post] Get Posts", error);
+    console.error('[Post] Get Posts', error);
     next(error);
   }
 };
@@ -109,14 +104,14 @@ export const createNewPost: RequestHandler = async (
     for (const file of files) {
       const s3FileKey = randomBytes();
       const resizedFile = await sharp(file.buffer)
-        .resize({ height: 1920, width: 1080, fit: "contain" })
+        .resize({ height: 1920, width: 1080, fit: 'contain' })
         .toBuffer();
 
       const params = {
         Bucket: bucketName,
         Key: s3FileKey,
         Body: resizedFile,
-        ContentType: file.mimetype,
+        ContentType: file.mimetype
       };
       const command = new PutObjectCommand(params);
       await s3Get.send(command);
@@ -125,14 +120,14 @@ export const createNewPost: RequestHandler = async (
         cleanFilename(safeDecodeURIComponent(file.originalname)),
         120
       );
-      const altPropertyName = "fileAltText" + file.originalname;
+      const altPropertyName = 'fileAltText' + file.originalname;
       const altText = req.body[altPropertyName];
       newFiles.push({
         fileName: newFileName,
         size: file.size,
         mimetype: file.mimetype,
         alt: altText,
-        fileKey: s3FileKey,
+        fileKey: s3FileKey
       });
     }
 
@@ -140,17 +135,17 @@ export const createNewPost: RequestHandler = async (
 
     const post = await prisma.post.create({
       data: {
-        author: "miho",
+        author: 'miho',
         caption: req.body.caption,
         files: {
-          create: newFiles,
-        },
-      },
+          create: newFiles
+        }
+      }
     });
 
     res.status(HttpStatusCodes.CREATED).json({});
   } catch (error) {
-    console.error("[Post] Create New Post", error);
+    console.error('[Post] Create New Post', error);
     next(error);
   }
 };
