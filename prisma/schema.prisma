@@ -10,9 +10,27 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id String @id @default(uuid())
+  status String // UNCONFIRMED | CONFIRMED 
+  givenName String
+  familyName String
+  email String @unique
+  sub String?
+  posts Post[]
+  account Account?
+}
+
+model Account {
+  id String @id @default(uuid())
+  ownerId String @unique
+  owner User @relation(fields:[ownerId], references:[id])
+}
+
 model Post {
   id String @id @default(uuid())
-  author String 
+  authorId String?
+  author User? @relation(fields:[authorId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
   files File[]
@@ -31,3 +49,4 @@ model File {
   post     Post?   @relation(fields: [postId], references: [id])
   postId   String?
 }
+

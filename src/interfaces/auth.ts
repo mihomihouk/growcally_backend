@@ -5,3 +5,8 @@ export interface UserParams {
   givenName: string;
   familyName: string;
 }
+
+export interface VerifyUserParams {
+  userSub: string;
+  verificationCode: string;
+}

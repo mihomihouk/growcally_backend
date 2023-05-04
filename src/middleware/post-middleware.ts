@@ -4,10 +4,8 @@ import {
   safeDecodeURIComponent,
   trimFilename
 } from '../utils/text';
-import { GetPostsRequest, UploadNewPostRequest } from '../interfaces/request';
 import { RequestHandler } from 'express';
 import { HttpStatusCodes } from '../enum/http-codes';
-import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { s3Get } from '../services/s3/s3-service';
 import { PrismaClient } from '@prisma/client';
@@ -19,9 +17,6 @@ import sharp from 'sharp';
 
 const randomBytes = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
 
-dotenv.config();
-
-const fs = require('fs');
 const prisma = new PrismaClient();
 
 const storage = multer.memoryStorage();
@@ -38,11 +33,7 @@ interface MulterFile {
   size: number;
 }
 
-export const getAllPosts: RequestHandler = async (
-  req: GetPostsRequest,
-  res,
-  next
-) => {
+export const getAllPosts: RequestHandler = async (req, res, next) => {
   try {
     const postsFromPrisma = await prisma.post.findMany({
       orderBy: [{ createdAt: 'desc' }],
@@ -78,7 +69,7 @@ export const getAllPosts: RequestHandler = async (
         files: newFiles,
         createdAt: post.createdAt,
         updatedAt: post.updatedAt,
-        author: post.author,
+        author: post.authorId!,
         likes: post.likes,
         totalComments: post.totalComments
       });
@@ -91,11 +82,7 @@ export const getAllPosts: RequestHandler = async (
   }
 };
 
-export const createNewPost: RequestHandler = async (
-  req: UploadNewPostRequest,
-  res,
-  next
-) => {
+export const createNewPost: RequestHandler = async (req, res, next) => {
   try {
     const files = req.files as MulterFile[];
 
@@ -133,9 +120,9 @@ export const createNewPost: RequestHandler = async (
 
     // Store data on DB
 
-    const post = await prisma.post.create({
+    await prisma.post.create({
       data: {
-        author: 'miho',
+        authorId: 'miho',
         caption: req.body.caption,
         files: {
           create: newFiles

@@ -1,10 +1,12 @@
 import {
   SignUpCommand,
   CognitoIdentityProviderClient,
-  SignUpCommandOutput
+  SignUpCommandOutput,
+  ConfirmSignUpCommand,
+  ResendConfirmationCodeCommand
 } from '@aws-sdk/client-cognito-identity-provider';
 import config from '../../../config';
-import { UserParams } from '../../interfaces/auth';
+import { UserParams, VerifyUserParams } from '../../interfaces/auth';
 
 export enum CognitoAttributes {
   Name = 'name',
@@ -55,4 +57,26 @@ export const registerToCognito = async (
   });
 
   return await cognitoService.send(command);
+};
+
+export const confirmSignUpWithCognito = async (
+  verifyUserParams: VerifyUserParams
+) => {
+  const { userSub, verificationCode } = verifyUserParams;
+  const command = new ConfirmSignUpCommand({
+    ClientId: clientId,
+    Username: userSub,
+    ConfirmationCode: verificationCode
+  });
+
+  return cognitoService.send(command);
+};
+
+export const resendConfirmationCode = async (email: string) => {
+  const command = new ResendConfirmationCodeCommand({
+    ClientId: clientId,
+    Username: email
+  });
+
+  return cognitoService.send(command);
 };
