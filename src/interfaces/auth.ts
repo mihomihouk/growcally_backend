@@ -7,6 +7,11 @@ export interface UserParams {
 }
 
 export interface VerifyUserParams {
-  userSub: string;
+  email: string;
   verificationCode: string;
+}
+
+export interface LoginUserParams {
+  email: string;
+  password: string;
 }
