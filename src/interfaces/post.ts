@@ -1,3 +1,5 @@
+import { User } from '@prisma/client';
+
 export interface UploadPost {
   caption: string;
   files: UploadFile[];

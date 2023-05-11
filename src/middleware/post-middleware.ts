@@ -1,4 +1,3 @@
-import { v4 } from 'uuid';
 import {
   cleanFilename,
   safeDecodeURIComponent,
@@ -14,6 +13,8 @@ import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import multer from 'multer';
 import sharp from 'sharp';
+import { User } from '../interfaces/user';
+import { convertPrismaUserToUser } from '../utils/user';
 
 const randomBytes = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
 
@@ -33,6 +34,10 @@ interface MulterFile {
   size: number;
 }
 
+interface RespondPost extends Omit<Post, 'authorId'> {
+  author: Omit<User, 'posts' | 'account'> | null;
+}
+
 export const getAllPosts: RequestHandler = async (req, res, next) => {
   try {
     const postsFromPrisma = await prisma.post.findMany({
@@ -42,7 +47,7 @@ export const getAllPosts: RequestHandler = async (req, res, next) => {
       }
     });
 
-    const posts: Post[] = [];
+    const posts: RespondPost[] = [];
     for (const post of postsFromPrisma) {
       const newFiles: MediaFile[] = [];
       for (const file of post.files) {
@@ -63,13 +68,24 @@ export const getAllPosts: RequestHandler = async (req, res, next) => {
         });
       }
 
+      // Get author
+      const prismaAuthor = await prisma.user.findUnique({
+        where: {
+          id: post.authorId
+        }
+      });
+
+      const author = prismaAuthor
+        ? convertPrismaUserToUser(prismaAuthor)
+        : null;
+
       posts.push({
         id: post.id,
         caption: post.caption,
         files: newFiles,
         createdAt: post.createdAt,
         updatedAt: post.updatedAt,
-        authorId: post.authorId!,
+        author: author,
         likes: post.likes,
         totalComments: post.totalComments
       });
