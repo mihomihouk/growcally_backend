@@ -158,11 +158,10 @@ export const loginUser: RequestHandler = async (req, res, next) => {
     };
     const result = await loginUserWithCognito(loginUserParams);
     const accessToken = result.AuthenticationResult?.AccessToken;
+
     res.status(HttpStatusCodes.OK).json({
-      data: {
-        user,
-        accessToken
-      }
+      user,
+      accessToken
     });
   } catch (error) {
     console.log('[Auth] Login Error', error);

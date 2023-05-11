@@ -69,7 +69,7 @@ export const getAllPosts: RequestHandler = async (req, res, next) => {
         files: newFiles,
         createdAt: post.createdAt,
         updatedAt: post.updatedAt,
-        author: post.authorId!,
+        authorId: post.authorId!,
         likes: post.likes,
         totalComments: post.totalComments
       });
@@ -107,8 +107,9 @@ export const createNewPost: RequestHandler = async (req, res, next) => {
         cleanFilename(safeDecodeURIComponent(file.originalname)),
         120
       );
-      const altPropertyName = 'fileAltText' + file.originalname;
+      const altPropertyName = 'fileAltText-' + file.originalname;
       const altText = req.body[altPropertyName];
+
       newFiles.push({
         fileName: newFileName,
         size: file.size,
@@ -122,7 +123,7 @@ export const createNewPost: RequestHandler = async (req, res, next) => {
 
     await prisma.post.create({
       data: {
-        authorId: 'miho',
+        authorId: req.body.authorId,
         caption: req.body.caption,
         files: {
           create: newFiles
@@ -130,7 +131,9 @@ export const createNewPost: RequestHandler = async (req, res, next) => {
       }
     });
 
-    res.status(HttpStatusCodes.CREATED).json({});
+    res
+      .status(HttpStatusCodes.CREATED)
+      .json({ message: 'Post successfully created' });
   } catch (error) {
     console.error('[Post] Create New Post', error);
     next(error);

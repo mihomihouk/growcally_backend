@@ -11,7 +11,7 @@ export interface UploadFile {
 
 export interface Post {
   id: string;
-  author: string;
+  authorId: string;
   createdAt: Date;
   updatedAt: Date;
   files: MediaFile[];
