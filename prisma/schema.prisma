@@ -16,9 +16,10 @@ model User {
   givenName String
   familyName String
   email String @unique
-  sub String?
+  sub String @unique
   posts Post[]
   account Account?
+  refreshToken String? @unique
 }
 
 model Account {

@@ -14,7 +14,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import multer from 'multer';
 import sharp from 'sharp';
 import { User } from '../interfaces/user';
-import { convertPrismaUserToUser } from '../utils/user';
+import { convertPgUserToUser } from '../utils/user';
 
 const randomBytes = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
 
@@ -69,15 +69,13 @@ export const getAllPosts: RequestHandler = async (req, res, next) => {
       }
 
       // Get author
-      const prismaAuthor = await prisma.user.findUnique({
+      const pgAuthor = await prisma.user.findUnique({
         where: {
           id: post.authorId
         }
       });
 
-      const author = prismaAuthor
-        ? convertPrismaUserToUser(prismaAuthor)
-        : null;
+      const author = pgAuthor ? convertPgUserToUser(pgAuthor) : null;
 
       posts.push({
         id: post.id,

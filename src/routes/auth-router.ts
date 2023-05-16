@@ -4,7 +4,7 @@ import {
   resendCode,
   signUpUser,
   verifyUser
-} from '../middleware/auth-middleware';
+} from '../controllers/auth-controller';
 
 const router = Router();
 

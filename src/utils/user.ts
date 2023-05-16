@@ -1,13 +1,13 @@
 import { User } from '@prisma/client';
 
-export const convertPrismaUserToUser = (prismaAuthor: User) => {
+export const convertPgUserToUser = (pgUser: User) => {
   const user = {
-    id: prismaAuthor.id,
-    status: prismaAuthor.status,
-    givenName: prismaAuthor.givenName,
-    familyName: prismaAuthor.familyName,
-    email: prismaAuthor.email,
-    sub: prismaAuthor.sub!
+    id: pgUser.id,
+    status: pgUser.status,
+    givenName: pgUser.givenName,
+    familyName: pgUser.familyName,
+    email: pgUser.email,
+    sub: pgUser.sub!
   };
   return user;
 };

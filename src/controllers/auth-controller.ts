@@ -4,9 +4,10 @@ import {
   loginUserWithCognito,
   registerToCognito,
   resendConfirmationCode
-} from '../services/cognito/cognito-services';
+} from '../services/cognito/cognito-service';
 import { HttpStatusCodes } from '../enum/http-codes';
 import { PrismaClient } from '@prisma/client';
+import { updatePgUser } from '../services/postgreSql/postgreSql-service';
 
 const prisma = new PrismaClient();
 
@@ -43,7 +44,12 @@ export const signUpUser: RequestHandler = async (req, res, next) => {
       password
     });
 
-    const userSub = registeredUser.UserSub;
+    if (!registeredUser) {
+      return res.status(HttpStatusCodes.BAD_REQUEST).json({
+        message: 'Signup failed. Please try again.'
+      });
+    }
+    const userSub = registeredUser.UserSub!;
 
     // Create a new user on DB
     const createdUser = await prisma.user.create({
@@ -82,18 +88,18 @@ export const verifyUser: RequestHandler = async (req, res, next) => {
         email
       }
     });
+    if (!updatedUser) {
+      return res.status(HttpStatusCodes.BAD_REQUEST).json({
+        message: 'You are not yet registered. Please sign up first.'
+      });
+    }
     if (updatedUser && updatedUser.status === 'CONFIRMED') {
-      throw new Error('User already confirmed');
+      return res
+        .status(HttpStatusCodes.BAD_REQUEST)
+        .json({ message: 'User already confirmed' });
     }
     await confirmSignUpWithCognito({ email, verificationCode });
-    await prisma.user.update({
-      where: {
-        email
-      },
-      data: {
-        status: 'CONFIRMED'
-      }
-    });
+    await updatePgUser(updatedUser?.id, { status: 'CONFIRMED' });
     return res
       .status(HttpStatusCodes.OK)
       .json({ message: 'Email successfully verified' });
@@ -158,10 +164,27 @@ export const loginUser: RequestHandler = async (req, res, next) => {
     };
     const result = await loginUserWithCognito(loginUserParams);
     const accessToken = result.AuthenticationResult?.AccessToken;
+    const refreshToken = result.AuthenticationResult?.RefreshToken;
+    const accessTokenExpiry = result.AuthenticationResult?.ExpiresIn;
+    if (!accessToken || !refreshToken || !accessTokenExpiry) {
+      return res.status(HttpStatusCodes.BAD_REQUEST).json({
+        message:
+          'Failed to initiate authentication. Please provide correct email and password.'
+      });
+    }
+
+    // Store fresh token in DB
+    await updatePgUser(user.id, { refreshToken });
+
+    // Set cookie
+    res.cookie('access_token', accessToken, {
+      secure: true,
+      httpOnly: true,
+      maxAge: 86400000
+    });
 
     res.status(HttpStatusCodes.OK).json({
-      user,
-      accessToken
+      user
     });
   } catch (error) {
     console.log('[Auth] Login Error', error);

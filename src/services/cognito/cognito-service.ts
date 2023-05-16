@@ -14,6 +14,7 @@ import {
   UserParams,
   VerifyUserParams
 } from '../../interfaces/auth';
+import { CognitoJwtVerifier } from 'aws-jwt-verify';
 
 export enum CognitoAttributes {
   Name = 'name',
@@ -29,6 +30,12 @@ const cognitoService = new CognitoIdentityProviderClient({
 
 const clientId = config.awsCognitoClientId!;
 const userPoolId = config.awsCognitoPoolId!;
+
+const verifier = CognitoJwtVerifier.create({
+  userPoolId: config.awsCognitoPoolId!,
+  tokenUse: 'access',
+  clientId: config.awsCognitoClientId!
+});
 
 export const registerToCognito = async (
   userParams: UserParams
@@ -102,10 +109,35 @@ export const loginUserWithCognito = (loginUserParams: LoginUserParams) => {
   return cognitoService.send(command);
 };
 
+export const validateJwtToken = async (accessToken: string) => {
+  try {
+    const result = await verifier.verify(accessToken);
+    console.log('Token is valid. Payload:', result);
+    return result;
+  } catch (error) {
+    console.log('[Auth] JWT token verification failed:', error);
+  }
+};
+
 export const getCognitoUser = async (email: string) => {
   const command = new AdminGetUserCommand({
     UserPoolId: userPoolId,
     Username: email
   });
   return await cognitoService.send(command);
+};
+
+export const refreshTokenWithCognito = async (refreshToken: string) => {
+  try {
+    const command = new InitiateAuthCommand({
+      AuthFlow: AuthFlowType.REFRESH_TOKEN_AUTH,
+      AuthParameters: {
+        REFRESH_TOKEN: refreshToken
+      },
+      ClientId: clientId
+    });
+    return await cognitoService.send(command);
+  } catch (error) {
+    console.log('[Auth] Refresh token failed', error);
+  }
 };

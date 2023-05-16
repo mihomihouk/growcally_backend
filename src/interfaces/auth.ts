@@ -15,3 +15,7 @@ export interface LoginUserParams {
   email: string;
   password: string;
 }
+export interface RefreshTokenParams {
+  email: string;
+  password: string;
+}
