@@ -18,10 +18,10 @@ export const authGuard: RequestHandler = async (
 ) => {
   try {
     let accessToken = req.cookies.access_token as string | undefined;
-    const userId = req.query.userId?.toString();
-    console.log('accessToken', accessToken);
+    const userId = req.query.userId?.toString() ?? req.body.userId;
 
     if (!accessToken || !userId) {
+      console.log('[Auth] No access token or user id');
       return res
         .status(HttpStatusCodes.UNAUTHORISED)
         .json({ message: 'Unauthorised' });
@@ -30,12 +30,14 @@ export const authGuard: RequestHandler = async (
     if (checkTokenExpired(accessToken)) {
       const pgUser = await getPgUserById(userId);
       if (!pgUser.refreshToken) {
+        console.log('[Auth] No refresh token');
         return res
           .status(HttpStatusCodes.UNAUTHORISED)
           .json({ message: 'Unauthorised' });
       }
       const result = await refreshTokenWithCognito(pgUser.refreshToken);
       if (!result?.AuthenticationResult) {
+        console.log('[Auth] Failed to retrieve refresh token from Cognito');
         return res
           .status(HttpStatusCodes.UNAUTHORISED)
           .json({ message: 'Unauthorised' });
@@ -44,6 +46,7 @@ export const authGuard: RequestHandler = async (
         result.AuthenticationResult;
 
       if (!AccessToken || !RefreshToken || !ExpiresIn) {
+        console.log('[Auth] AuthenticationResult is insufficient');
         return res
           .status(HttpStatusCodes.UNAUTHORISED)
           .json({ message: 'Unauthorised' });
@@ -60,6 +63,7 @@ export const authGuard: RequestHandler = async (
 
     const result = await validateJwtToken(accessToken);
     if (!result) {
+      console.log('[Auth] Failed to validate jwt token');
       return res
         .status(HttpStatusCodes.UNAUTHORISED)
         .json({ message: 'Unauthorised' });

@@ -8,6 +8,7 @@ import {
 import { HttpStatusCodes } from '../enum/http-codes';
 import { PrismaClient } from '@prisma/client';
 import { updatePgUser } from '../services/postgreSql/postgreSql-service';
+import { AuthRequest } from '../interfaces/request';
 
 const prisma = new PrismaClient();
 
@@ -193,5 +194,30 @@ export const loginUser: RequestHandler = async (req, res, next) => {
     return res
       .status(HttpStatusCodes.UNAUTHORISED)
       .json({ message: errorMessage });
+  }
+};
+
+export const logoutUser: RequestHandler = async (req: AuthRequest, res) => {
+  try {
+    const userId = req.body.userId;
+    if (userId) {
+      await updatePgUser(userId, { refreshToken: '' });
+
+      res.clearCookie('access_token', {
+        secure: true,
+        httpOnly: true
+      });
+
+      return res.status(HttpStatusCodes.OK).json({
+        message: 'User logged out successfully'
+      });
+    } else {
+      res
+        .status(HttpStatusCodes.NOT_FOUND)
+        .json({ status: 'error', message: 'User not found' });
+    }
+  } catch (error) {
+    console.log('[Auth] Logout Error', error);
+    res.status(HttpStatusCodes.BAD_REQUEST).json({ message: error });
   }
 };
