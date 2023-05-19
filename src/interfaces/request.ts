@@ -5,3 +5,8 @@ export interface AuthRequest extends Request {
   user?: User;
   cookies: any;
 }
+
+export interface PostRequest extends Request {
+  userId?: string;
+  postId?: string;
+}

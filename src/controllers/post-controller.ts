@@ -15,6 +15,11 @@ import multer from 'multer';
 import sharp from 'sharp';
 import { User } from '../interfaces/user';
 import { convertPgUserToUser } from '../utils/user';
+import { PostRequest } from '../interfaces/request';
+import {
+  getPgPostByPostId,
+  likePost
+} from '../services/postgreSql/postgreSql-service';
 
 const randomBytes = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
 
@@ -84,7 +89,7 @@ export const getAllPosts: RequestHandler = async (req, res, next) => {
         createdAt: post.createdAt,
         updatedAt: post.updatedAt,
         author: author,
-        likes: post.likes,
+        totalLikes: post.totalLikes,
         totalComments: post.totalComments
       });
     }
@@ -145,11 +150,41 @@ export const createNewPost: RequestHandler = async (req, res, next) => {
       }
     });
 
-    res
+    return res
       .status(HttpStatusCodes.CREATED)
       .json({ message: 'Post successfully created' });
   } catch (error) {
-    console.error('[Post] Create New Post', error);
-    next(error);
+    console.error('[Post] Create New Post Error', error);
+    return res.status(HttpStatusCodes.BAD_REQUEST).json({ message: error });
+  }
+};
+
+export const updateLikePost: RequestHandler = async (req: PostRequest, res) => {
+  try {
+    const userId = req.query.userId?.toString();
+    const { postId } = req.body;
+    const pgPost = await getPgPostByPostId(postId);
+    if (!userId || !postId) {
+      return res.status(HttpStatusCodes.BAD_REQUEST).json({
+        message:
+          "Oops! We couldn't process your request because some required information is missing."
+      });
+    }
+
+    // TODO: Uncomment these lines below before release
+    // if (pgPost.authorId === userId) {
+    //   return res.status(HttpStatusCodes.BAD_REQUEST).json({
+    //     message: 'You are only able to like posts that belong to other users'
+    //   });
+    // }
+
+    const { totalLikes, likedPostsIds } = await likePost(postId, userId);
+
+    return res
+      .status(HttpStatusCodes.OK)
+      .json({ message: 'Post liked successfully', likedPostsIds, totalLikes });
+  } catch (error) {
+    console.log('[Post] Like Post Error', error);
+    return res.status(HttpStatusCodes.BAD_REQUEST).json({ message: error });
   }
 };

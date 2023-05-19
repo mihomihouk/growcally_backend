@@ -17,8 +17,8 @@ export interface Post {
   createdAt: Date;
   updatedAt: Date;
   files: MediaFile[];
-  likes: number;
   caption: string;
+  totalLikes: number;
   totalComments: number;
 }
 export interface MediaFile {

@@ -49,3 +49,42 @@ export const getPgPostsByUserId = async (userId: string) => {
   }
   return pgPost;
 };
+
+export const getPgPostByPostId = async (postId: string) => {
+  const pgPost = await prisma.post.findUnique({ where: { id: postId } });
+  if (!pgPost) {
+    throw Error('[Postgre] Post not found!');
+  }
+  return pgPost;
+};
+
+export const likePost = async (postId: string, userId: string) => {
+  const updatedPost = await prisma.post.update({
+    where: {
+      id: postId
+    },
+    data: {
+      totalLikes: {
+        increment: 1
+      },
+      likedBy: {
+        create: {
+          userId: userId
+        }
+      }
+    }
+  });
+  const totalLikes = updatedPost.totalLikes;
+  const likedPosts = await prisma.post.findMany({
+    where: {
+      likedBy: {
+        some: {
+          userId
+        }
+      }
+    }
+  });
+  const likedPostsIds = likedPosts.map((post) => post.id);
+
+  return { totalLikes, likedPostsIds };
+};

@@ -11,33 +11,45 @@ datasource db {
 }
 
 model User {
-  id String @id @default(uuid())
+  id String @id @default(uuid()) @unique
   status String // UNCONFIRMED | CONFIRMED 
   givenName String
   familyName String
   email String @unique
   sub String @unique
-  posts Post[]
+  posts Post[] @relation("UserPosts")
   account Account?
   refreshToken String? @unique
+  likedPosts Like[] @relation("UserLikes")
 }
 
 model Account {
   id String @id @default(uuid())
-  ownerId String @unique
   owner User @relation(fields:[ownerId], references:[id])
+  ownerId String @unique
 }
 
 model Post {
-  id String @id @default(uuid())
+  id String @id @default(uuid()) @unique
+  author User @relation("UserPosts", fields: [authorId], references: [id])
   authorId String
-  author User? @relation(fields:[authorId], references: [id])
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
   files File[]
-  likes Int @default(0)
+  likedBy Like[] @relation("PostLikes")
   caption String @db.Text
+  totalLikes Int @default(0)
   totalComments Int @default(0)
+}
+
+model Like {
+  id      String @id @default(uuid())
+  postId  String 
+  userId  String 
+  post    Post   @relation("PostLikes", fields: [postId], references: [id])
+  user    User   @relation("UserLikes", fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  @@unique([postId, userId])
 }
 
 model File {
