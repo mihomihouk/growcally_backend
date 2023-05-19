@@ -1,4 +1,4 @@
-import { User } from '@prisma/client';
+import { FullUser } from './user';
 
 export interface UploadPost {
   caption: string;
@@ -13,7 +13,7 @@ export interface UploadFile {
 
 export interface Post {
   id: string;
-  authorId: string;
+  author: FullUser;
   createdAt: Date;
   updatedAt: Date;
   files: MediaFile[];

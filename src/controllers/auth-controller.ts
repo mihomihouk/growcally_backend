@@ -175,7 +175,7 @@ export const loginUser: RequestHandler = async (req, res, next) => {
     }
 
     // Store fresh token in DB
-    await updatePgUser(user.id, { refreshToken });
+    const updatedUser = await updatePgUser(user.id, { refreshToken });
 
     // Set cookie
     res.cookie('access_token', accessToken, {
@@ -185,7 +185,7 @@ export const loginUser: RequestHandler = async (req, res, next) => {
     });
 
     res.status(HttpStatusCodes.OK).json({
-      user
+      updatedUser
     });
   } catch (error) {
     console.log('[Auth] Login Error', error);

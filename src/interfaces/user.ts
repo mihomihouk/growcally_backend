@@ -1,12 +1,13 @@
-import { Account, Post } from '@prisma/client';
+import { Account } from '@prisma/client';
 
-export interface User {
+export interface FullUser {
   id: string;
   status: string;
   givenName: string;
   familyName: string;
   email: string;
   sub: string;
-  posts: Post[];
+  posts?: string[];
+  likedPosts?: string[];
   account: Account;
 }

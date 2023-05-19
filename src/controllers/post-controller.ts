@@ -13,12 +13,12 @@ import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import multer from 'multer';
 import sharp from 'sharp';
-import { User } from '../interfaces/user';
 import { convertPgUserToUser } from '../utils/user';
 import { PostRequest } from '../interfaces/request';
 import {
   getPgPostByPostId,
-  likePost
+  likePost,
+  unlikePost
 } from '../services/postgreSql/postgreSql-service';
 
 const randomBytes = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
@@ -39,10 +39,6 @@ interface MulterFile {
   size: number;
 }
 
-interface RespondPost extends Omit<Post, 'authorId'> {
-  author: Omit<User, 'posts' | 'account'> | null;
-}
-
 export const getAllPosts: RequestHandler = async (req, res, next) => {
   try {
     const postsFromPrisma = await prisma.post.findMany({
@@ -52,7 +48,7 @@ export const getAllPosts: RequestHandler = async (req, res, next) => {
       }
     });
 
-    const posts: RespondPost[] = [];
+    const posts: Post[] = [];
     for (const post of postsFromPrisma) {
       const newFiles: MediaFile[] = [];
       for (const file of post.files) {
@@ -79,8 +75,13 @@ export const getAllPosts: RequestHandler = async (req, res, next) => {
           id: post.authorId
         }
       });
+      if (!pgAuthor) {
+        return res
+          .status(HttpStatusCodes.INTERNAL_ERROR)
+          .json({ message: 'Sorry! There has been an internal error.' });
+      }
 
-      const author = pgAuthor ? convertPgUserToUser(pgAuthor) : null;
+      const author = await convertPgUserToUser(pgAuthor);
 
       posts.push({
         id: post.id,
@@ -97,7 +98,9 @@ export const getAllPosts: RequestHandler = async (req, res, next) => {
     res.status(HttpStatusCodes.OK).json(posts);
   } catch (error) {
     console.error('[Post] Get Posts', error);
-    next(error);
+    res
+      .status(HttpStatusCodes.BAD_REQUEST)
+      .json({ message: "Oops! We've failed to get some information." });
   }
 };
 
@@ -159,7 +162,10 @@ export const createNewPost: RequestHandler = async (req, res, next) => {
   }
 };
 
-export const updateLikePost: RequestHandler = async (req: PostRequest, res) => {
+export const likePostRequest: RequestHandler = async (
+  req: PostRequest,
+  res
+) => {
   try {
     const userId = req.query.userId?.toString();
     const { postId } = req.body;
@@ -185,6 +191,32 @@ export const updateLikePost: RequestHandler = async (req: PostRequest, res) => {
       .json({ message: 'Post liked successfully', likedPostsIds, totalLikes });
   } catch (error) {
     console.log('[Post] Like Post Error', error);
+    return res.status(HttpStatusCodes.BAD_REQUEST).json({ message: error });
+  }
+};
+
+export const unlikePostRequest: RequestHandler = async (
+  req: PostRequest,
+  res
+) => {
+  try {
+    const userId = req.query.userId?.toString();
+    const { postId } = req.body;
+    if (!userId || !postId) {
+      return res.status(HttpStatusCodes.BAD_REQUEST).json({
+        message:
+          "Oops! We couldn't process your request because some required information is missing."
+      });
+    }
+    const { totalLikes, likedPostsIds } = await unlikePost(postId, userId);
+
+    return res.status(HttpStatusCodes.OK).json({
+      message: "You've unliked post successfully",
+      totalLikes,
+      likedPostsIds
+    });
+  } catch (error) {
+    console.log(error);
     return res.status(HttpStatusCodes.BAD_REQUEST).json({ message: error });
   }
 };
