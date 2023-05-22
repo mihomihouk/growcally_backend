@@ -1,38 +1,21 @@
-import {
-  cleanFilename,
-  safeDecodeURIComponent,
-  trimFilename
-} from '../utils/text';
 import { RequestHandler } from 'express';
 import { HttpStatusCodes } from '../enum/http-codes';
-import crypto from 'crypto';
-import { s3Get } from '../services/s3/s3-service';
-import { PrismaClient } from '@prisma/client';
-import { MediaFile, ClientPost } from '../interfaces/post';
-import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import multer from 'multer';
-import sharp from 'sharp';
-import { convertPgUserToClientUser } from '../utils/user';
 import { PostRequest } from '../interfaces/request';
 import {
   createComment,
+  createPost,
+  deletePost,
+  getAllPosts,
   getPgPostByPostId,
   likePost,
   unlikePost
 } from '../services/postgreSql/postgreSql-service';
-import { convertPgCommentsToClientComments } from '../utils/post';
-
-const randomBytes = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
-
-const prisma = new PrismaClient();
 
 const storage = multer.memoryStorage();
 export const upload = multer({ storage: storage });
 
-const bucketName = process.env.BUCKET_NAME!;
-
-interface MulterFile {
+export interface MulterFile {
   fieldname: string;
   originalname: string;
   encoding: string;
@@ -41,69 +24,9 @@ interface MulterFile {
   size: number;
 }
 
-export const getAllPosts: RequestHandler = async (req, res, next) => {
+export const getAllPostsRequest: RequestHandler = async (req, res) => {
   try {
-    const postsFromPrisma = await prisma.post.findMany({
-      orderBy: [{ createdAt: 'desc' }],
-      include: {
-        files: true
-      }
-    });
-
-    const posts: ClientPost[] = [];
-    for (const post of postsFromPrisma) {
-      const newFiles: MediaFile[] = [];
-      for (const file of post.files) {
-        const getObjectParams = {
-          Bucket: bucketName,
-          Key: file.fileKey
-        };
-        const command = new GetObjectCommand(getObjectParams);
-        const fileUrl = await getSignedUrl(s3Get, command, { expiresIn: 3600 });
-        newFiles.push({
-          id: file.id,
-          fileName: file.fileName,
-          size: file.size,
-          mimetype: file.mimetype,
-          alt: file.alt,
-          fileKey: file.fileKey,
-          fileUrl
-        });
-      }
-
-      // Get author
-      const pgAuthor = await prisma.user.findUnique({
-        where: {
-          id: post.authorId
-        }
-      });
-      if (!pgAuthor) {
-        return res
-          .status(HttpStatusCodes.INTERNAL_ERROR)
-          .json({ message: 'Sorry! There has been an internal error.' });
-      }
-
-      const clientAuthor = await convertPgUserToClientUser(pgAuthor);
-      const pgComments = await prisma.comment.findMany({
-        where: { postId: post.id }
-      });
-
-      const clientComments = await convertPgCommentsToClientComments(
-        pgComments
-      );
-
-      posts.push({
-        id: post.id,
-        caption: post.caption,
-        files: newFiles,
-        createdAt: post.createdAt,
-        updatedAt: post.updatedAt,
-        author: clientAuthor,
-        totalLikes: post.totalLikes,
-        totalComments: post.totalComments,
-        comments: clientComments
-      });
-    }
+    const posts = await getAllPosts();
 
     res.status(HttpStatusCodes.OK).json(posts);
   } catch (error) {
@@ -116,53 +39,7 @@ export const getAllPosts: RequestHandler = async (req, res, next) => {
 
 export const createNewPost: RequestHandler = async (req, res) => {
   try {
-    const files = req.files as MulterFile[];
-
-    const newFiles: MediaFile[] = [];
-    // Upload files to S3
-    for (const file of files) {
-      const s3FileKey = randomBytes();
-      const resizedFile = await sharp(file.buffer)
-        .resize({ height: 1920, width: 1080, fit: 'contain' })
-        .toBuffer();
-
-      const params = {
-        Bucket: bucketName,
-        Key: s3FileKey,
-        Body: resizedFile,
-        ContentType: file.mimetype
-      };
-      const command = new PutObjectCommand(params);
-      await s3Get.send(command);
-
-      const newFileName = trimFilename(
-        cleanFilename(safeDecodeURIComponent(file.originalname)),
-        120
-      );
-      const altPropertyName = 'fileAltText-' + file.originalname;
-      const altText = req.body[altPropertyName];
-
-      newFiles.push({
-        fileName: newFileName,
-        size: file.size,
-        mimetype: file.mimetype,
-        alt: altText,
-        fileKey: s3FileKey
-      });
-    }
-
-    // Store data on DB
-
-    await prisma.post.create({
-      data: {
-        authorId: req.body.authorId,
-        caption: req.body.caption,
-        files: {
-          create: newFiles
-        }
-      }
-    });
-
+    await createPost(req);
     return res
       .status(HttpStatusCodes.CREATED)
       .json({ message: 'Post successfully created' });
@@ -171,6 +48,31 @@ export const createNewPost: RequestHandler = async (req, res) => {
     return res
       .status(HttpStatusCodes.INTERNAL_ERROR)
       .json({ message: 'Oops! Something went wrong while creating the post.' });
+  }
+};
+
+export const deletePostRequest: RequestHandler = async (req, res) => {
+  try {
+    const userId = req.query.userId?.toString();
+    const postId = req.params.postId;
+
+    if (!userId || !postId) {
+      throw new Error(
+        'Invalid deletePostParams. userId and postId are required.'
+      );
+    }
+
+    const { updatedPosts, updatedUser } = await deletePost(postId, userId);
+    return res.status(HttpStatusCodes.CREATED).json({
+      message: 'Post deleted successfully',
+      updatedPosts,
+      updatedUser
+    });
+  } catch (error) {
+    console.error('[Post] Delete New Post Error', error);
+    return res
+      .status(HttpStatusCodes.INTERNAL_ERROR)
+      .json({ message: 'Oops! Something went wrong while deleting the post.' });
   }
 };
 
@@ -183,10 +85,9 @@ export const likePostRequest: RequestHandler = async (
     const { postId } = req.body;
     const pgPost = await getPgPostByPostId(postId);
     if (!userId || !postId) {
-      return res.status(HttpStatusCodes.BAD_REQUEST).json({
-        message:
-          "Oops! We couldn't process your request because some required information is missing."
-      });
+      throw new Error(
+        'Invalid deletePostParams. userId and postId are required.'
+      );
     }
 
     // TODO: Uncomment these lines below before release
@@ -217,10 +118,9 @@ export const unlikePostRequest: RequestHandler = async (
     const userId = req.query.userId?.toString();
     const { postId } = req.body;
     if (!userId || !postId) {
-      return res.status(HttpStatusCodes.BAD_REQUEST).json({
-        message:
-          "Oops! We couldn't process your request because some required information is missing."
-      });
+      throw new Error(
+        'Invalid deletePostParams. userId and postId are required.'
+      );
     }
     const { totalLikes, likedPostsIds } = await unlikePost(postId, userId);
 
@@ -245,10 +145,9 @@ export const createNewComment: RequestHandler = async (req, res) => {
     const { postId, text } = req.body;
 
     if (!userId || !postId) {
-      return res.status(HttpStatusCodes.BAD_REQUEST).json({
-        message:
-          "Oops! We couldn't process your request because some required information is missing."
-      });
+      throw new Error(
+        'Invalid deletePostParams. userId and postId are required.'
+      );
     }
 
     // Store data on DB

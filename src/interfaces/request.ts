@@ -1,8 +1,8 @@
 import { Request } from 'express';
-import { User } from './user';
+import { ClientUser } from './user';
 export interface AuthRequest extends Request {
   userId?: string;
-  user?: User;
+  user?: ClientUser;
   cookies: any;
 }
 

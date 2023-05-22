@@ -1,10 +1,28 @@
-import { Comment, File, Post, PrismaClient, Reply } from '@prisma/client';
+import { Comment, File, PrismaClient, Reply } from '@prisma/client';
 import { ClientUser } from '../../interfaces/user';
 import { convertPgUserToClientUser } from '../../utils/user';
-import { convertPgPostToClientPost } from '../../utils/post';
-import { ClientPost } from '../../interfaces/post';
+import {
+  convertPgCommentsToClientComments,
+  convertPgPostToClientPost
+} from '../../utils/post';
+import { ClientPost, MediaFile } from '../../interfaces/post';
+import { s3 } from '../s3/s3-service';
+import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { MulterFile } from '../../controllers/post-controller';
+import crypto from 'crypto';
+import sharp from 'sharp';
+import {
+  cleanFilename,
+  safeDecodeURIComponent,
+  trimFilename
+} from '../../utils/text';
+import { Request } from 'express';
+
+const bucketName = process.env.BUCKET_NAME!;
 
 const prisma = new PrismaClient();
+const randomBytes = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
 
 // User
 export const getPgUserById = async (userId: string) => {
@@ -52,19 +70,133 @@ export const getPgAccountByUserId = async (userId: string) => {
 
 // Post
 
+export const getAllPosts = async (): Promise<ClientPost[]> => {
+  const postsFromPrisma = await prisma.post.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    include: {
+      files: true
+    }
+  });
+
+  const posts: ClientPost[] = [];
+  for (const post of postsFromPrisma) {
+    const newFiles: MediaFile[] = [];
+    for (const file of post.files) {
+      const getObjectParams = {
+        Bucket: bucketName,
+        Key: file.fileKey
+      };
+      const command = new GetObjectCommand(getObjectParams);
+      const fileUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+      newFiles.push({
+        id: file.id,
+        fileName: file.fileName,
+        size: file.size,
+        mimetype: file.mimetype,
+        alt: file.alt,
+        fileKey: file.fileKey,
+        fileUrl
+      });
+    }
+
+    // Get author
+    const pgAuthor = await prisma.user.findUnique({
+      where: {
+        id: post.authorId
+      }
+    });
+    if (!pgAuthor) {
+      throw new Error('author is not found');
+    }
+
+    const clientAuthor = await convertPgUserToClientUser(pgAuthor);
+    const pgComments = await prisma.comment.findMany({
+      where: { postId: post.id }
+    });
+
+    const clientComments = await convertPgCommentsToClientComments(pgComments);
+
+    posts.push({
+      id: post.id,
+      caption: post.caption,
+      files: newFiles,
+      createdAt: post.createdAt,
+      updatedAt: post.updatedAt,
+      author: clientAuthor,
+      totalLikes: post.totalLikes,
+      totalComments: post.totalComments,
+      comments: clientComments
+    });
+  }
+  return posts;
+};
+
+export const createPost = async (req: Request) => {
+  const files = req.files as MulterFile[];
+
+  const newFiles: MediaFile[] = [];
+  // Upload files to S3
+  for (const file of files) {
+    const s3FileKey = randomBytes();
+    const resizedFile = await sharp(file.buffer)
+      .resize({ height: 1920, width: 1080, fit: 'contain' })
+      .toBuffer();
+
+    const params = {
+      Bucket: bucketName,
+      Key: s3FileKey,
+      Body: resizedFile,
+      ContentType: file.mimetype
+    };
+    const command = new PutObjectCommand(params);
+    await s3.send(command);
+
+    const newFileName = trimFilename(
+      cleanFilename(safeDecodeURIComponent(file.originalname)),
+      120
+    );
+    const altPropertyName = 'fileAltText-' + file.originalname;
+    const altText = req.body[altPropertyName];
+
+    newFiles.push({
+      fileName: newFileName,
+      size: file.size,
+      mimetype: file.mimetype,
+      alt: altText,
+      fileKey: s3FileKey
+    });
+  }
+
+  // Store data on DB
+
+  await prisma.post.create({
+    data: {
+      authorId: req.body.authorId,
+      caption: req.body.caption,
+      files: {
+        create: newFiles
+      }
+    }
+  });
+};
+
+export const deletePost = async (postId: string, userId: string) => {
+  await prisma.like.deleteMany({ where: { postId } });
+  await prisma.comment.deleteMany({ where: { postId } });
+  await prisma.post.delete({ where: { id: postId } });
+  const updatedPosts = await getAllPosts();
+  const updatedPgUser = await getPgUserById(userId);
+  const updatedUser = await convertPgUserToClientUser(updatedPgUser);
+  return { updatedPosts, updatedUser };
+};
+
 export const getPgPostsByUserId = async (userId: string) => {
   const pgPost = await prisma.post.findMany({ where: { authorId: userId } });
-  if (!pgPost) {
-    throw Error('[Postgre] posts not found!');
-  }
   return pgPost;
 };
 
 export const getPgPostByPostId = async (postId: string) => {
   const pgPost = await prisma.post.findUnique({ where: { id: postId } });
-  if (!pgPost) {
-    throw Error('[Postgre] Post not found!');
-  }
   return pgPost;
 };
 
