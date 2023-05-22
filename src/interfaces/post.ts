@@ -1,4 +1,4 @@
-import { FullUser } from './user';
+import { ClientUser } from './user';
 
 export interface UploadPost {
   caption: string;
@@ -11,15 +11,16 @@ export interface UploadFile {
   altText?: string;
 }
 
-export interface Post {
+export interface ClientPost {
   id: string;
-  author: FullUser;
+  author: ClientUser;
   createdAt: Date;
   updatedAt: Date;
   files: MediaFile[];
   caption: string;
   totalLikes: number;
   totalComments: number;
+  comments: ClientComment[];
 }
 export interface MediaFile {
   id?: string;
@@ -29,4 +30,20 @@ export interface MediaFile {
   alt: string | null;
   fileKey: string;
   fileUrl?: string;
+}
+
+export interface ClientComment {
+  id: string;
+  content: string;
+  updatedAt: string;
+  author: ClientUser;
+  replies?: ClientReply[];
+}
+export interface ClientReply {
+  id: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  author: ClientUser;
+  commentId: string;
 }

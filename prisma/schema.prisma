@@ -21,6 +21,8 @@ model User {
   account Account?
   refreshToken String? @unique
   likedPosts Like[] @relation("UserLikes")
+  comments Comment[] 
+  replies Reply[]
 }
 
 model Account {
@@ -40,6 +42,7 @@ model Post {
   caption String @db.Text
   totalLikes Int @default(0)
   totalComments Int @default(0)
+  comments Comment[] 
 }
 
 model Like {
@@ -63,3 +66,25 @@ model File {
   postId   String?
 }
 
+model Comment {
+  id        String    @id @default(uuid()) @unique
+  content   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+  author    User      @relation(fields: [authorId], references: [id])
+  authorId  String
+  post      Post      @relation(fields: [postId], references: [id])
+  postId    String
+  replies   Reply[]
+}
+
+model Reply {
+  id        String    @id @default(uuid()) @unique
+  content   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+  author    User      @relation(fields: [authorId], references: [id])
+  authorId  String
+  comment   Comment   @relation(fields: [commentId], references: [id])
+  commentId String
+}

@@ -4,9 +4,11 @@ import {
   getPgAccountByUserId,
   getPgPostsByUserId
 } from '../services/postgreSql/postgreSql-service';
-import { FullUser } from '../interfaces/user';
+import { ClientUser } from '../interfaces/user';
 
-export const convertPgUserToUser = async (pgUser: User): Promise<FullUser> => {
+export const convertPgUserToClientUser = async (
+  pgUser: User
+): Promise<ClientUser> => {
   //Insert account and likedPost in user to return full user
   const account = await getPgAccountByUserId(pgUser.id);
   const posts = await getPgPostsByUserId(pgUser.id);
