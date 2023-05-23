@@ -7,7 +7,11 @@ import {
 } from '../services/cognito/cognito-service';
 import { HttpStatusCodes } from '../enum/http-codes';
 import { PrismaClient } from '@prisma/client';
-import { updatePgUser } from '../services/postgreSql/postgreSql-service';
+import {
+  fetchPosts,
+  fetchUser,
+  updatePgUser
+} from '../services/postgreSql/postgreSql-service';
 import { AuthRequest } from '../interfaces/request';
 
 const prisma = new PrismaClient();
@@ -200,24 +204,37 @@ export const loginUser: RequestHandler = async (req, res, next) => {
 export const logoutUser: RequestHandler = async (req: AuthRequest, res) => {
   try {
     const userId = req.body.userId;
-    if (userId) {
-      await updatePgUser(userId, { refreshToken: '' });
-
-      res.clearCookie('access_token', {
-        secure: true,
-        httpOnly: true
-      });
-
-      return res.status(HttpStatusCodes.OK).json({
-        message: 'User logged out successfully'
-      });
-    } else {
-      res
+    if (!userId) {
+      return res
         .status(HttpStatusCodes.NOT_FOUND)
-        .json({ status: 'error', message: 'User not found' });
+        .json({ message: 'User not found' });
     }
+    await updatePgUser(userId, { refreshToken: '' });
+
+    res.clearCookie('access_token', {
+      secure: true,
+      httpOnly: true
+    });
+
+    return res.status(HttpStatusCodes.OK).json({
+      message: 'User logged out successfully'
+    });
   } catch (error) {
     console.log('[Auth] Logout Error', error);
-    res.status(HttpStatusCodes.BAD_REQUEST).json({ message: error });
+    return res.status(HttpStatusCodes.BAD_REQUEST).json({ message: error });
+  }
+};
+
+export const fetchUserDetailRequest: RequestHandler = async (req, res) => {
+  try {
+    const targetUserId = req.params.userId;
+    const user = await fetchUser(targetUserId);
+    const posts = await fetchPosts(targetUserId);
+    return res
+      .status(HttpStatusCodes.OK)
+      .json({ message: 'User fetched successfully!', user, posts });
+  } catch (error) {
+    console.log('[Auth] Fetch User Error', error);
+    return res.status(HttpStatusCodes.BAD_REQUEST).json({ message: error });
   }
 };

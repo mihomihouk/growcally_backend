@@ -1,4 +1,12 @@
-import { Comment, File, PrismaClient, Reply } from '@prisma/client';
+import {
+  Account,
+  Comment,
+  File,
+  Post,
+  PrismaClient,
+  Reply,
+  User
+} from '@prisma/client';
 import { ClientUser } from '../../interfaces/user';
 import { convertPgUserToClientUser } from '../../utils/user';
 import {
@@ -25,7 +33,13 @@ const prisma = new PrismaClient();
 const randomBytes = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
 
 // User
-export const getPgUserById = async (userId: string) => {
+
+export const fetchUser = async (userId: string): Promise<ClientUser> => {
+  const pgUser = await getPgUserById(userId);
+  return await convertPgUserToClientUser(pgUser);
+};
+
+export const getPgUserById = async (userId: string): Promise<User> => {
   const pgUser = await prisma.user.findUnique({ where: { id: userId } });
   if (!pgUser) {
     throw Error('[Postgre] User not found!');
@@ -33,7 +47,7 @@ export const getPgUserById = async (userId: string) => {
   return pgUser;
 };
 
-export const getPgUserBySub = async (userSub: string) => {
+export const getPgUserBySub = async (userSub: string): Promise<User> => {
   const pgUser = await prisma.user.findUnique({ where: { sub: userSub } });
   if (!pgUser) {
     throw Error('[Postgre] User not found!');
@@ -58,7 +72,9 @@ export const updatePgUser = async (
 
 // Account
 
-export const getPgAccountByUserId = async (userId: string) => {
+export const getPgAccountByUserId = async (
+  userId: string
+): Promise<Account> => {
   const pgAccount = await prisma.account.findUnique({
     where: { ownerId: userId }
   });
@@ -131,7 +147,7 @@ export const getAllPosts = async (): Promise<ClientPost[]> => {
   return posts;
 };
 
-export const createPost = async (req: Request) => {
+export const createPost = async (req: Request): Promise<void> => {
   const files = req.files as MulterFile[];
 
   const newFiles: MediaFile[] = [];
@@ -190,17 +206,88 @@ export const deletePost = async (postId: string, userId: string) => {
   return { updatedPosts, updatedUser };
 };
 
-export const getPgPostsByUserId = async (userId: string) => {
-  const pgPost = await prisma.post.findMany({ where: { authorId: userId } });
-  return pgPost;
+export const fetchPosts = async (userId: string): Promise<ClientPost[]> => {
+  const pgPosts = await getPgPostsByUserId(userId);
+
+  const posts: ClientPost[] = [];
+  for (const post of pgPosts) {
+    const newFiles: MediaFile[] = [];
+    for (const file of post.files) {
+      const getObjectParams = {
+        Bucket: bucketName,
+        Key: file.fileKey
+      };
+      const command = new GetObjectCommand(getObjectParams);
+      const fileUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+      newFiles.push({
+        id: file.id,
+        fileName: file.fileName,
+        size: file.size,
+        mimetype: file.mimetype,
+        alt: file.alt,
+        fileKey: file.fileKey,
+        fileUrl
+      });
+    }
+
+    // Get author
+    const pgAuthor = await prisma.user.findUnique({
+      where: {
+        id: post.authorId
+      }
+    });
+    if (!pgAuthor) {
+      throw new Error('author is not found');
+    }
+
+    const clientAuthor = await convertPgUserToClientUser(pgAuthor);
+    const pgComments = await prisma.comment.findMany({
+      where: { postId: post.id }
+    });
+
+    const clientComments = await convertPgCommentsToClientComments(pgComments);
+
+    posts.push({
+      id: post.id,
+      caption: post.caption,
+      files: newFiles,
+      createdAt: post.createdAt,
+      updatedAt: post.updatedAt,
+      author: clientAuthor,
+      totalLikes: post.totalLikes,
+      totalComments: post.totalComments,
+      comments: clientComments
+    });
+  }
+  return posts;
 };
 
-export const getPgPostByPostId = async (postId: string) => {
+interface PgPostWithFiles extends Post {
+  files: File[];
+}
+
+export const getPgPostsByUserId = async (
+  userId: string
+): Promise<PgPostWithFiles[]> => {
+  const pgPosts = await prisma.post.findMany({
+    where: { authorId: userId },
+    orderBy: [{ createdAt: 'desc' }],
+    include: {
+      files: true
+    }
+  });
+  return pgPosts;
+};
+
+export const getPgPostByPostId = async (postId: string): Promise<Post> => {
   const pgPost = await prisma.post.findUnique({ where: { id: postId } });
+  if (!pgPost) {
+    throw Error('[Postgre] User not found!');
+  }
   return pgPost;
 };
 
-export const getLikedPosts = async (userId: string) => {
+export const getLikedPosts = async (userId: string): Promise<Post[]> => {
   return await prisma.post.findMany({
     where: {
       likedBy: {

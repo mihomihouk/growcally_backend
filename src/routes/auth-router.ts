@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  fetchUserDetailRequest,
   loginUser,
   logoutUser,
   resendCode,
@@ -15,5 +16,6 @@ router.post('/auth/verify', verifyUser);
 router.post('/auth/resend-code', resendCode);
 router.post('/auth/login', loginUser);
 router.post('/auth/logout', authGuard, logoutUser);
+router.get('/auth/:userId', authGuard, fetchUserDetailRequest);
 
 export default router;
