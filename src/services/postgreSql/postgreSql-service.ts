@@ -4,6 +4,7 @@ import {
   File,
   Post,
   PrismaClient,
+  ProfileImage,
   Reply,
   User
 } from '@prisma/client';
@@ -14,9 +15,11 @@ import {
   convertPgPostToClientPost
 } from '../../utils/post';
 import { ClientPost, MediaFile } from '../../interfaces/post';
-import { s3 } from '../s3/s3-service';
-import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import {
+  deleteFileFromS3,
+  getFileFromS3,
+  uploadFileToS3
+} from '../s3/s3-service';
 import { MulterFile } from '../../controllers/post-controller';
 import crypto from 'crypto';
 import sharp from 'sharp';
@@ -27,7 +30,8 @@ import {
 } from '../../utils/text';
 import { Request } from 'express';
 
-const bucketName = process.env.BUCKET_NAME!;
+const postBucketName = process.env.POST_BUCKET_NAME!;
+const profileImageBucketName = process.env.PROFILE_IMAGE_BUCKET_NAME!;
 
 const prisma = new PrismaClient();
 const randomBytes = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
@@ -55,6 +59,15 @@ export const getPgUserBySub = async (userSub: string): Promise<User> => {
   return pgUser;
 };
 
+export const getPgProfileImage = async (
+  userId: string
+): Promise<ProfileImage | null> => {
+  const pgProfileImage = await prisma.profileImage.findUnique({
+    where: { userId }
+  });
+  return pgProfileImage;
+};
+
 export const updatePgUser = async (
   userId: string,
   data: any
@@ -68,6 +81,102 @@ export const updatePgUser = async (
 
   const updatedPgUser = convertPgUserToClientUser(updatedUser);
   return updatedPgUser;
+};
+
+export const updateUserProfile = async (
+  req: Request,
+  userId: string
+): Promise<ClientUser> => {
+  console.log('req.file:::', req.file);
+  const file = req.file as MulterFile | undefined;
+  const bio = req.body.bio as string | undefined;
+  console.log('req.body:::', req.body);
+  if (!bio && !file) {
+    throw new Error('No user bio and file to update');
+  }
+
+  if (file) {
+    // Delete existing profile image in s3
+    const existingProfileImage = await prisma.profileImage.findUnique({
+      where: {
+        userId
+      }
+    });
+
+    if (existingProfileImage) {
+      const deleteObjectParams = {
+        Bucket: profileImageBucketName,
+        Key: existingProfileImage.fileKey
+      };
+      await deleteFileFromS3(deleteObjectParams);
+    }
+
+    // Store profile image in S3
+
+    const s3FileKey = randomBytes();
+    const formattedFile = await sharp(file.buffer).toBuffer();
+    const params = {
+      Bucket: profileImageBucketName,
+      Key: s3FileKey,
+      Body: formattedFile,
+      ContentType: file.mimetype
+    };
+
+    await uploadFileToS3(params);
+
+    // Delete existing profile image entry
+
+    await prisma.profileImage.deleteMany({
+      where: {
+        userId
+      }
+    });
+
+    // Create a new profile image entry
+
+    const newFileName = trimFilename(
+      cleanFilename(safeDecodeURIComponent(file.originalname)),
+      120
+    );
+
+    const newProfileImage = {
+      fileName: newFileName,
+      size: file.size,
+      mimeType: file.mimetype,
+      fileKey: s3FileKey
+    };
+
+    await prisma.profileImage.create({
+      data: {
+        ...newProfileImage,
+        user: {
+          connect: { id: userId }
+        }
+      }
+    });
+  }
+
+  if (bio) {
+    await prisma.user.update({
+      where: {
+        id: userId
+      },
+      data: {
+        bio
+      }
+    });
+  }
+
+  const pgUser = await prisma.user.findUnique({
+    where: {
+      id: userId
+    }
+  });
+
+  if (!pgUser) {
+    throw new Error('[Postgres] User not found');
+  }
+  return await convertPgUserToClientUser(pgUser);
 };
 
 // Account
@@ -99,11 +208,10 @@ export const getAllPosts = async (): Promise<ClientPost[]> => {
     const newFiles: MediaFile[] = [];
     for (const file of post.files) {
       const getObjectParams = {
-        Bucket: bucketName,
+        Bucket: postBucketName,
         Key: file.fileKey
       };
-      const command = new GetObjectCommand(getObjectParams);
-      const fileUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+      const fileUrl = await getFileFromS3(getObjectParams);
       newFiles.push({
         id: file.id,
         fileName: file.fileName,
@@ -159,13 +267,13 @@ export const createPost = async (req: Request): Promise<void> => {
       .toBuffer();
 
     const params = {
-      Bucket: bucketName,
+      Bucket: postBucketName,
       Key: s3FileKey,
       Body: resizedFile,
       ContentType: file.mimetype
     };
-    const command = new PutObjectCommand(params);
-    await s3.send(command);
+
+    await uploadFileToS3(params);
 
     const newFileName = trimFilename(
       cleanFilename(safeDecodeURIComponent(file.originalname)),
@@ -197,6 +305,21 @@ export const createPost = async (req: Request): Promise<void> => {
 };
 
 export const deletePost = async (postId: string, userId: string) => {
+  // Delete files from s3
+  const files = await prisma.file.findMany({
+    where: {
+      postId
+    }
+  });
+  for (const file of files) {
+    const deleteObjectParams = {
+      Bucket: postBucketName,
+      Key: file.fileKey
+    };
+    await deleteFileFromS3(deleteObjectParams);
+  }
+
+  // Delete related information in DB
   await prisma.like.deleteMany({ where: { postId } });
   await prisma.comment.deleteMany({ where: { postId } });
   await prisma.post.delete({ where: { id: postId } });
@@ -214,11 +337,12 @@ export const fetchPosts = async (userId: string): Promise<ClientPost[]> => {
     const newFiles: MediaFile[] = [];
     for (const file of post.files) {
       const getObjectParams = {
-        Bucket: bucketName,
+        Bucket: postBucketName,
         Key: file.fileKey
       };
-      const command = new GetObjectCommand(getObjectParams);
-      const fileUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+
+      const fileUrl = await getFileFromS3(getObjectParams);
+
       newFiles.push({
         id: file.id,
         fileName: file.fileName,

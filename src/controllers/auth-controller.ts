@@ -10,7 +10,8 @@ import { PrismaClient } from '@prisma/client';
 import {
   fetchPosts,
   fetchUser,
-  updatePgUser
+  updatePgUser,
+  updateUserProfile
 } from '../services/postgreSql/postgreSql-service';
 import { AuthRequest } from '../interfaces/request';
 
@@ -235,6 +236,24 @@ export const fetchUserDetailRequest: RequestHandler = async (req, res) => {
       .json({ message: 'User fetched successfully!', user, posts });
   } catch (error) {
     console.log('[Auth] Fetch User Error', error);
+    return res.status(HttpStatusCodes.BAD_REQUEST).json({ message: error });
+  }
+};
+
+export const updateUserProfileRequest: RequestHandler = async (req, res) => {
+  try {
+    const userId = req.query.userId?.toString();
+    if (!userId) {
+      return res
+        .status(HttpStatusCodes.NOT_FOUND)
+        .json({ message: 'User not found' });
+    }
+    const user = await updateUserProfile(req, userId);
+    return res
+      .status(HttpStatusCodes.OK)
+      .json({ message: 'User profile updated successfully!', user });
+  } catch (error) {
+    console.log('[Auth] Update profile Error', error);
     return res.status(HttpStatusCodes.BAD_REQUEST).json({ message: error });
   }
 };
