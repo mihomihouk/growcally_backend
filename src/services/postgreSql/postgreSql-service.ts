@@ -10,10 +10,7 @@ import {
 } from '@prisma/client';
 import { ClientUser } from '../../interfaces/user';
 import { convertPgUserToClientUser } from '../../utils/user';
-import {
-  convertPgCommentsToClientComments,
-  convertPgPostToClientPost
-} from '../../utils/post';
+import { convertPgCommentsToClientComments } from '../../utils/post';
 import { ClientPost, ClientMediaFile } from '../../interfaces/post';
 import {
   deleteFileFromS3,
@@ -436,7 +433,10 @@ export const getClientPosts = async (
 
     const clientAuthor = await convertPgUserToClientUser(pgAuthor);
     const pgComments = await prisma.comment.findMany({
-      where: { postId: post.id }
+      where: { postId: post.id },
+      orderBy: {
+        createdAt: 'desc'
+      }
     });
 
     const clientComments = await convertPgCommentsToClientComments(pgComments);
@@ -492,16 +492,23 @@ export const createComment = async (
 
   const updatedPgPost = await prisma.post.findUnique({
     where: { id: postId },
-    include: { comments: true, files: true }
+    include: {
+      comments: {
+        orderBy: {
+          createdAt: 'desc'
+        }
+      },
+      files: true
+    }
   });
 
   if (!updatedPgPost) {
     throw new Error('Failed to update post');
   }
 
-  const clientPost = await convertPgPostToClientPost(updatedPgPost);
+  const result = await getClientPosts([updatedPgPost]);
 
-  return clientPost;
+  return result[0];
 };
 
 export const getReplies = async (commentId: string): Promise<Reply[]> => {

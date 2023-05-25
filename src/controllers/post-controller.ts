@@ -171,7 +171,6 @@ export const createNewComment: RequestHandler = async (req, res) => {
       );
     }
 
-    // Store data on DB
     const updatedPost = await createComment({ userId, postId, text });
     return res
       .status(HttpStatusCodes.CREATED)
