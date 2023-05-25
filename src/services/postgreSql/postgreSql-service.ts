@@ -14,7 +14,7 @@ import {
   convertPgCommentsToClientComments,
   convertPgPostToClientPost
 } from '../../utils/post';
-import { ClientPost, MediaFile } from '../../interfaces/post';
+import { ClientPost, ClientMediaFile } from '../../interfaces/post';
 import {
   deleteFileFromS3,
   getFileFromS3,
@@ -87,10 +87,8 @@ export const updateUserProfile = async (
   req: Request,
   userId: string
 ): Promise<ClientUser> => {
-  console.log('req.file:::', req.file);
   const file = req.file as MulterFile | undefined;
   const bio = req.body.bio as string | undefined;
-  console.log('req.body:::', req.body);
   if (!bio && !file) {
     throw new Error('No user bio and file to update');
   }
@@ -203,62 +201,13 @@ export const getAllPosts = async (): Promise<ClientPost[]> => {
     }
   });
 
-  const posts: ClientPost[] = [];
-  for (const post of postsFromPrisma) {
-    const newFiles: MediaFile[] = [];
-    for (const file of post.files) {
-      const getObjectParams = {
-        Bucket: postBucketName,
-        Key: file.fileKey
-      };
-      const fileUrl = await getFileFromS3(getObjectParams);
-      newFiles.push({
-        id: file.id,
-        fileName: file.fileName,
-        size: file.size,
-        mimetype: file.mimetype,
-        alt: file.alt,
-        fileKey: file.fileKey,
-        fileUrl
-      });
-    }
-
-    // Get author
-    const pgAuthor = await prisma.user.findUnique({
-      where: {
-        id: post.authorId
-      }
-    });
-    if (!pgAuthor) {
-      throw new Error('author is not found');
-    }
-
-    const clientAuthor = await convertPgUserToClientUser(pgAuthor);
-    const pgComments = await prisma.comment.findMany({
-      where: { postId: post.id }
-    });
-
-    const clientComments = await convertPgCommentsToClientComments(pgComments);
-
-    posts.push({
-      id: post.id,
-      caption: post.caption,
-      files: newFiles,
-      createdAt: post.createdAt,
-      updatedAt: post.updatedAt,
-      author: clientAuthor,
-      totalLikes: post.totalLikes,
-      totalComments: post.totalComments,
-      comments: clientComments
-    });
-  }
-  return posts;
+  return await getClientPosts(postsFromPrisma);
 };
 
 export const createPost = async (req: Request): Promise<void> => {
   const files = req.files as MulterFile[];
 
-  const newFiles: MediaFile[] = [];
+  const newFiles: ClientMediaFile[] = [];
   // Upload files to S3
   for (const file of files) {
     const s3FileKey = randomBytes();
@@ -332,58 +281,7 @@ export const deletePost = async (postId: string, userId: string) => {
 export const fetchPosts = async (userId: string): Promise<ClientPost[]> => {
   const pgPosts = await getPgPostsByUserId(userId);
 
-  const posts: ClientPost[] = [];
-  for (const post of pgPosts) {
-    const newFiles: MediaFile[] = [];
-    for (const file of post.files) {
-      const getObjectParams = {
-        Bucket: postBucketName,
-        Key: file.fileKey
-      };
-
-      const fileUrl = await getFileFromS3(getObjectParams);
-
-      newFiles.push({
-        id: file.id,
-        fileName: file.fileName,
-        size: file.size,
-        mimetype: file.mimetype,
-        alt: file.alt,
-        fileKey: file.fileKey,
-        fileUrl
-      });
-    }
-
-    // Get author
-    const pgAuthor = await prisma.user.findUnique({
-      where: {
-        id: post.authorId
-      }
-    });
-    if (!pgAuthor) {
-      throw new Error('author is not found');
-    }
-
-    const clientAuthor = await convertPgUserToClientUser(pgAuthor);
-    const pgComments = await prisma.comment.findMany({
-      where: { postId: post.id }
-    });
-
-    const clientComments = await convertPgCommentsToClientComments(pgComments);
-
-    posts.push({
-      id: post.id,
-      caption: post.caption,
-      files: newFiles,
-      createdAt: post.createdAt,
-      updatedAt: post.updatedAt,
-      author: clientAuthor,
-      totalLikes: post.totalLikes,
-      totalComments: post.totalComments,
-      comments: clientComments
-    });
-  }
-  return posts;
+  return await getClientPosts(pgPosts);
 };
 
 interface PgPostWithFiles extends Post {
@@ -480,6 +378,87 @@ export const unlikePost = async (postId: string, userId: string) => {
   return { totalLikes, likedPostsIds };
 };
 
+export const fetchLikePosts = async (userId: string): Promise<ClientPost[]> => {
+  const pgUser = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { likedPosts: true }
+  });
+  if (!pgUser?.likedPosts) {
+    throw new Error('There is no liked posts.');
+  }
+  const likedPostArray = [] as PgPostWithFiles[];
+  for (const likedPost of pgUser.likedPosts) {
+    const post = await prisma.post.findUnique({
+      where: { id: likedPost.postId },
+      include: { files: true }
+    });
+    if (post) {
+      likedPostArray.push(post);
+    }
+  }
+  return await getClientPosts(likedPostArray);
+};
+
+export const getClientPosts = async (
+  pgPosts: PgPostWithFiles[]
+): Promise<ClientPost[]> => {
+  const posts: ClientPost[] = [];
+  for (const post of pgPosts) {
+    const newFiles: ClientMediaFile[] = [];
+    for (const file of post.files) {
+      const getObjectParams = {
+        Bucket: postBucketName,
+        Key: file.fileKey
+      };
+
+      const fileUrl = await getFileFromS3(getObjectParams);
+
+      newFiles.push({
+        id: file.id,
+        fileName: file.fileName,
+        size: file.size,
+        mimetype: file.mimetype,
+        alt: file.alt,
+        fileKey: file.fileKey,
+        fileUrl
+      });
+    }
+
+    // Get author
+    const pgAuthor = await prisma.user.findUnique({
+      where: {
+        id: post.authorId
+      }
+    });
+    if (!pgAuthor) {
+      throw new Error('author is not found');
+    }
+
+    const clientAuthor = await convertPgUserToClientUser(pgAuthor);
+    const pgComments = await prisma.comment.findMany({
+      where: { postId: post.id }
+    });
+
+    const clientComments = await convertPgCommentsToClientComments(pgComments);
+
+    posts.push({
+      id: post.id,
+      caption: post.caption,
+      files: newFiles,
+      createdAt: post.createdAt,
+      updatedAt: post.updatedAt,
+      author: clientAuthor,
+      totalLikes: post.totalLikes,
+      totalComments: post.totalComments,
+      comments: clientComments
+    });
+  }
+  const orderedPosts = posts.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  return orderedPosts;
+};
+
 export const getComments = async (postId: string): Promise<Comment[]> => {
   return await prisma.comment.findMany({ where: { postId } });
 };
@@ -532,6 +511,6 @@ export const getReplies = async (commentId: string): Promise<Reply[]> => {
   return replies;
 };
 
-export const getMediaFiles = async (postId: string): Promise<File[]> => {
+export const getPgMediaFiles = async (postId: string): Promise<File[]> => {
   return await prisma.file.findMany({ where: { postId } });
 };

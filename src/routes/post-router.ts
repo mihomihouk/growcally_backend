@@ -3,6 +3,7 @@ import {
   createNewComment,
   createNewPost,
   deletePostRequest,
+  fetchLikedPostsRequest,
   getAllPostsRequest,
   likePostRequest,
   unlikePostRequest,
@@ -16,6 +17,7 @@ router.post('/post/upload', upload.array('images', 10), createNewPost);
 router.delete('/post/:postId', deletePostRequest);
 router.put('/post/like', likePostRequest);
 router.put('/post/unlike', unlikePostRequest);
+router.get('/post/like', fetchLikedPostsRequest);
 router.post('/post/comment', createNewComment);
 
 export default router;

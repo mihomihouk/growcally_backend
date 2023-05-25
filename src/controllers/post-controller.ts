@@ -6,6 +6,7 @@ import {
   createComment,
   createPost,
   deletePost,
+  fetchLikePosts,
   getAllPosts,
   getPgPostByPostId,
   likePost,
@@ -119,7 +120,7 @@ export const unlikePostRequest: RequestHandler = async (
     const { postId } = req.body;
     if (!userId || !postId) {
       throw new Error(
-        'Invalid deletePostParams. userId and postId are required.'
+        'Invalid unlike post params. userId and postId are required.'
       );
     }
     const { totalLikes, likedPostsIds } = await unlikePost(postId, userId);
@@ -131,6 +132,26 @@ export const unlikePostRequest: RequestHandler = async (
     });
   } catch (error) {
     console.log('[Post] Unlike Post Error', error);
+    return res
+      .status(HttpStatusCodes.INTERNAL_ERROR)
+      .json({ message: 'Oops! Something went wrong.' });
+  }
+};
+
+export const fetchLikedPostsRequest: RequestHandler = async (req, res) => {
+  try {
+    const userId = req.query.userId?.toString();
+    if (!userId) {
+      throw new Error('Invalid fetch liked posts params. userId is required.');
+    }
+    const likedPosts = await fetchLikePosts(userId);
+
+    return res.status(HttpStatusCodes.OK).json({
+      message: "You've fetched liked posts successfully",
+      likedPosts
+    });
+  } catch (error) {
+    console.log('[Post] Fetch Liked Posts Error', error);
     return res
       .status(HttpStatusCodes.INTERNAL_ERROR)
       .json({ message: 'Oops! Something went wrong.' });

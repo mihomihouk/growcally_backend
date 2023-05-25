@@ -1,7 +1,7 @@
 import { Comment, Post, Reply } from '@prisma/client';
 import {
   getComments,
-  getMediaFiles,
+  getPgMediaFiles,
   getPgUserById,
   getReplies
 } from '../services/postgreSql/postgreSql-service';
@@ -11,7 +11,7 @@ import { ClientComment, ClientReply } from '../interfaces/post';
 export const convertPgPostToClientPost = async (pgPost: Post) => {
   const pgAuthor = await getPgUserById(pgPost.authorId);
   const author = await convertPgUserToClientUser(pgAuthor);
-  const files = await getMediaFiles(pgPost.id);
+  const files = await getPgMediaFiles(pgPost.id);
   const pgComments = await getComments(pgPost.id);
   const comments = await convertPgCommentsToClientComments(pgComments);
 

@@ -16,13 +16,13 @@ export interface ClientPost {
   author: ClientUser;
   createdAt: Date;
   updatedAt: Date;
-  files: MediaFile[];
+  files: ClientMediaFile[];
   caption: string;
   totalLikes: number;
   totalComments: number;
   comments: ClientComment[];
 }
-export interface MediaFile {
+export interface ClientMediaFile {
   id?: string;
   fileName: string;
   size: number;
