@@ -125,12 +125,12 @@ export const verifyUser: RequestHandler = async (req, res, next) => {
         break;
     }
     return res
-      .status(HttpStatusCodes.BAD_REQUEST)
+      .status(HttpStatusCodes.INTERNAL_ERROR)
       .json({ message: errorMessage });
   }
 };
 
-export const resendCode: RequestHandler = async (req, res, next) => {
+export const resendCode: RequestHandler = async (req, res) => {
   const { email } = req.body;
   try {
     await resendConfirmationCode(email);
@@ -139,11 +139,11 @@ export const resendCode: RequestHandler = async (req, res, next) => {
       .json({ message: 'Verification code successfully sent' });
   } catch (error) {
     console.log('[Auth] Resend Code Error', error);
-    return next(error);
+    return res.status(HttpStatusCodes.INTERNAL_ERROR).json({ message: error });
   }
 };
 
-export const loginUser: RequestHandler = async (req, res, next) => {
+export const loginUser: RequestHandler = async (req, res) => {
   const { email, password } = req.body;
   try {
     //Check if the user already exists
