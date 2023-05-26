@@ -23,7 +23,7 @@ export const setupCors = (app: Application): void => {
       'Accept',
       'X-Access-Token'
     ],
-    methods: 'GET,HEAD,OPTIONS,PUT,PATCH,POST,DELETE',
+    methods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'PATCH', 'POST', 'DELETE'],
     credentials: true,
     optionsSuccessStatus: 200
   };
