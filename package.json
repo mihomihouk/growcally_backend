@@ -5,8 +5,8 @@
   "repository": "https://github.com/mihomihouk/growcally_backend.git",
   "license": "MIT",
   "scripts": {
-    "build": "tsc",
-    "start": "NODE_ENV=production node ./build/index.js",
+    "build": "tsc && prisma generate && prisma migrate deploy",
+    "start": "NODE_ENV=production node ./build/src/index.js",
     "start:dev": "NODE_ENV=development ts-node src/index.ts",
     "dev": "NODE_ENV=development doppler run nodemon src/index.ts",
     "migrate:dev": "prisma migrate dev",
@@ -15,8 +15,7 @@
     "migrate:reset": "prisma migrate reset",
     "db:seed": "prisma db seed",
     "prisma:generate": "prisma generate",
-    "prisma:studio": "prisma studio",
-    "production:build": "prisma generate && prisma migrate deploy"
+    "prisma:studio": "prisma studio"
   },
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.321.1",
