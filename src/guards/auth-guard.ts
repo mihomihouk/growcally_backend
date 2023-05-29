@@ -24,7 +24,9 @@ export const authGuard: RequestHandler = async (
       console.log('[Auth] No access token or user id');
       return res
         .status(HttpStatusCodes.UNAUTHORISED)
-        .json({ message: 'Unauthorised' });
+        .json({
+          message: 'Unauthorised: Your access token or user id is missing.'
+        });
     }
 
     if (checkTokenExpired(accessToken)) {
@@ -32,15 +34,15 @@ export const authGuard: RequestHandler = async (
       if (!pgUser.refreshToken) {
         console.log('[Auth] No refresh token');
         return res
-          .status(HttpStatusCodes.UNAUTHORISED)
-          .json({ message: 'Unauthorised' });
+          .status(HttpStatusCodes.INTERNAL_ERROR)
+          .json({ message: "We've failed to confirm your user information" });
       }
       const result = await refreshTokenWithCognito(pgUser.refreshToken);
       if (!result?.AuthenticationResult) {
         console.log('[Auth] Failed to retrieve refresh token from Cognito');
         return res
-          .status(HttpStatusCodes.UNAUTHORISED)
-          .json({ message: 'Unauthorised' });
+          .status(HttpStatusCodes.INTERNAL_ERROR)
+          .json({ message: "We've failed to renew your refresh token" });
       }
       const { AccessToken, RefreshToken, ExpiresIn } =
         result.AuthenticationResult;
@@ -48,8 +50,8 @@ export const authGuard: RequestHandler = async (
       if (!AccessToken || !RefreshToken || !ExpiresIn) {
         console.log('[Auth] AuthenticationResult is insufficient');
         return res
-          .status(HttpStatusCodes.UNAUTHORISED)
-          .json({ message: 'Unauthorised' });
+          .status(HttpStatusCodes.INTERNAL_ERROR)
+          .json({ message: "We've failed to renew your refresh token" });
       }
 
       await updatePgUser(userId, { refreshToken: RefreshToken });
@@ -66,7 +68,7 @@ export const authGuard: RequestHandler = async (
       console.log('[Auth] Failed to validate jwt token');
       return res
         .status(HttpStatusCodes.UNAUTHORISED)
-        .json({ message: 'Unauthorised' });
+        .json({ message: 'Unauthorised: Your token is invalid.' });
     }
     next();
   } catch (error: any) {
