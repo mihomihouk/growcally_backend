@@ -21,7 +21,8 @@ export const setupCors = (app: Application): void => {
       'X-Requested-With',
       'Content-Type',
       'Accept',
-      'X-Access-Token'
+      'X-Access-Token',
+      'Authorization'
     ],
     methods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'PATCH', 'POST', 'DELETE'],
     credentials: true,
