@@ -186,7 +186,7 @@ export const loginUser: RequestHandler = async (req, res) => {
     res.cookie('access_token', accessToken, {
       secure: true,
       httpOnly: true,
-      domain: '.growcallyuk.com',
+      domain: process.env.DOMAIN,
       maxAge: 86400000
     });
 
