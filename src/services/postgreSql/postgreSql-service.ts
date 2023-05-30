@@ -10,7 +10,10 @@ import {
 } from '@prisma/client';
 import { ClientUser } from '../../interfaces/user';
 import { convertPgUserToClientUser } from '../../utils/user';
-import { convertPgCommentsToClientComments } from '../../utils/post';
+import {
+  convertPgCommentsToClientComments,
+  convertPgPostToClientPost
+} from '../../utils/post';
 import { ClientPost, ClientMediaFile } from '../../interfaces/post';
 import {
   deleteFileFromS3,
@@ -207,7 +210,7 @@ export const getAllPosts = async (): Promise<ClientPost[]> => {
   return await getClientPosts(postsFromPrisma);
 };
 
-export const createPost = async (req: Request): Promise<void> => {
+export const createPost = async (req: Request): Promise<ClientPost> => {
   const files = req.files as MulterFile[];
 
   const newFiles: ClientMediaFile[] = [];
@@ -260,7 +263,7 @@ export const createPost = async (req: Request): Promise<void> => {
 
   // Store data on DB
 
-  await prisma.post.create({
+  const pgPost = await prisma.post.create({
     data: {
       authorId: req.body.authorId,
       caption: req.body.caption,
@@ -269,6 +272,7 @@ export const createPost = async (req: Request): Promise<void> => {
       }
     }
   });
+  return await convertPgPostToClientPost(pgPost);
 };
 
 export const deletePost = async (postId: string, userId: string) => {

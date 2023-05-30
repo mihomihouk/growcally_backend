@@ -63,7 +63,6 @@ model File {
   size     Int
   mimetype String
   alt      String?
-  fileKey  String?
   portraitFileKey  String
   squareFileKey String
   post     Post?   @relation(fields: [postId], references: [id])

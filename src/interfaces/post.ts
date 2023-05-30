@@ -28,7 +28,6 @@ export interface ClientMediaFile {
   size: number;
   mimetype: string;
   alt: string | null;
-  fileKey?: string;
   portraitFileKey: string;
   squareFileKey: string;
   portraitFileUrl?: string;

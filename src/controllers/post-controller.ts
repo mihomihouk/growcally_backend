@@ -40,10 +40,10 @@ export const getAllPostsRequest: RequestHandler = async (req, res) => {
 
 export const createNewPost: RequestHandler = async (req, res) => {
   try {
-    await createPost(req);
+    const post = await createPost(req);
     return res
       .status(HttpStatusCodes.CREATED)
-      .json({ message: 'Post successfully created' });
+      .json({ message: 'Post successfully created', post });
   } catch (error) {
     console.error('[Post] Create New Post Error', error);
     return res
