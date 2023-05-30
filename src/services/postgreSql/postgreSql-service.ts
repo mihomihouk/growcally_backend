@@ -30,7 +30,13 @@ import { Request } from 'express';
 const postBucketName = process.env.POST_BUCKET_NAME!;
 const profileImageBucketName = process.env.PROFILE_IMAGE_BUCKET_NAME!;
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL
+    }
+  }
+});
 const randomBytes = (bytes = 32) => crypto.randomBytes(bytes).toString('hex');
 
 // User

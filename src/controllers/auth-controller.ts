@@ -15,7 +15,13 @@ import {
 } from '../services/postgreSql/postgreSql-service';
 import { AuthRequest } from '../interfaces/request';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL
+    }
+  }
+});
 
 export const signUpUser: RequestHandler = async (req, res, next) => {
   const {
