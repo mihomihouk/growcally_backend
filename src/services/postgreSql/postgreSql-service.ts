@@ -207,19 +207,33 @@ export const createPost = async (req: Request): Promise<void> => {
   const newFiles: ClientMediaFile[] = [];
   // Upload files to S3
   for (const file of files) {
-    const s3FileKey = randomBytes();
-    const resizedFile = await sharp(file.buffer)
+    const portraitFileKey = randomBytes();
+    const squareFileKey = randomBytes();
+    const resizedPortraitFile = await sharp(file.buffer)
       .resize({ height: 1920, width: 1080, fit: 'contain' })
       .toBuffer();
+    const resizedSquareFile = await sharp(file.buffer)
+      .resize({ height: 1080, width: 1080, fit: 'contain' })
+      .toBuffer();
 
-    const params = {
+    // Upload resized portrait file to S3
+    const portraitParams = {
       Bucket: postBucketName,
-      Key: s3FileKey,
-      Body: resizedFile,
+      Key: portraitFileKey,
+      Body: resizedPortraitFile,
       ContentType: file.mimetype
     };
 
-    await uploadFileToS3(params);
+    await uploadFileToS3(portraitParams);
+
+    // Upload resized square file to S3
+    const squareParams = {
+      Bucket: postBucketName,
+      Key: squareFileKey,
+      Body: resizedSquareFile,
+      ContentType: file.mimetype
+    };
+    await uploadFileToS3(squareParams);
 
     const newFileName = trimFilename(
       cleanFilename(safeDecodeURIComponent(file.originalname)),
@@ -233,7 +247,8 @@ export const createPost = async (req: Request): Promise<void> => {
       size: file.size,
       mimetype: file.mimetype,
       alt: altText,
-      fileKey: s3FileKey
+      portraitFileKey,
+      squareFileKey
     });
   }
 
@@ -257,12 +272,19 @@ export const deletePost = async (postId: string, userId: string) => {
       postId
     }
   });
+
   for (const file of files) {
-    const deleteObjectParams = {
+    const deletePortraitFileParams = {
       Bucket: postBucketName,
-      Key: file.fileKey
+      Key: file.portraitFileKey
     };
-    await deleteFileFromS3(deleteObjectParams);
+    await deleteFileFromS3(deletePortraitFileParams);
+
+    const deleteSquareFileParams = {
+      Bucket: postBucketName,
+      Key: file.squareFileKey
+    };
+    await deleteFileFromS3(deleteSquareFileParams);
   }
 
   // Delete related information in DB
@@ -403,12 +425,18 @@ export const getClientPosts = async (
   for (const post of pgPosts) {
     const newFiles: ClientMediaFile[] = [];
     for (const file of post.files) {
-      const getObjectParams = {
+      const getPortraitFileParams = {
         Bucket: postBucketName,
-        Key: file.fileKey
+        Key: file.portraitFileKey
       };
 
-      const fileUrl = await getFileFromS3(getObjectParams);
+      const portraitFileUrl = await getFileFromS3(getPortraitFileParams);
+
+      const getSquareFileParams = {
+        Bucket: postBucketName,
+        Key: file.squareFileKey
+      };
+      const squareFileUrl = await getFileFromS3(getSquareFileParams);
 
       newFiles.push({
         id: file.id,
@@ -416,8 +444,10 @@ export const getClientPosts = async (
         size: file.size,
         mimetype: file.mimetype,
         alt: file.alt,
-        fileKey: file.fileKey,
-        fileUrl
+        portraitFileKey: file.portraitFileKey,
+        squareFileKey: file.squareFileKey,
+        portraitFileUrl,
+        squareFileUrl
       });
     }
 
